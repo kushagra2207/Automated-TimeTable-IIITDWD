@@ -1,8 +1,9 @@
 import { useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  LayoutGrid, Clock, LogOut, Sun, Moon, User,
-  Zap, ChevronRight, Download, AlertCircle, CheckCircle2,
+  LogOut, Sun, Moon, User,
+  Zap, Download, AlertCircle, CheckCircle2,
+  FileSpreadsheet, Table2,
 } from "lucide-react";
 import JSZip from "jszip";
 
@@ -10,58 +11,11 @@ import Logo from "../components/ui/Logo";
 import Dropzone from "../components/ui/Dropzone";
 import StepProgress from "../components/ui/StepProgress";
 import TimetableViewer from "../components/ui/TimetableViewer";
+import DataTable from "../components/ui/DataTable";
 import { parseXlsxBlob, parseCsvString } from "../utils/parseXlsx";
 import { useTheme } from "../hooks/useTheme";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
-
-// ─── NAV ITEM ──────────────────────────────────────────────────────────────
-function NavItem({ icon: Icon, label, active, onClick, danger }) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: "10px",
-        padding: "9px 12px",
-        borderRadius: "8px",
-        background: active ? "var(--accent-muted)" : "none",
-        border: "none",
-        cursor: "pointer",
-        width: "100%",
-        color: danger
-          ? "var(--error)"
-          : active
-          ? "var(--text-accent)"
-          : "var(--text-secondary)",
-        fontSize: "0.875rem",
-        fontFamily: "var(--font-body)",
-        fontWeight: active ? 600 : 400,
-        textAlign: "left",
-        transition: "all 0.18s ease",
-      }}
-      onMouseEnter={(e) => {
-        if (!active) {
-          e.currentTarget.style.background = danger ? "var(--error-muted)" : "var(--bg-hover)";
-          e.currentTarget.style.color = danger ? "var(--error)" : "var(--text-primary)";
-        }
-      }}
-      onMouseLeave={(e) => {
-        if (!active) {
-          e.currentTarget.style.background = "none";
-          e.currentTarget.style.color = danger ? "var(--error)" : "var(--text-secondary)";
-        }
-      }}
-    >
-      <Icon size={16} style={{ flexShrink: 0, opacity: danger ? 0.9 : 1 }} />
-      <span>{label}</span>
-      {active && (
-        <ChevronRight size={13} style={{ marginLeft: "auto", opacity: 0.5 }} />
-      )}
-    </button>
-  );
-}
 
 export default function GeneratePage() {
   const navigate = useNavigate();
@@ -77,6 +31,11 @@ export default function GeneratePage() {
   const [generatedFiles, setGeneratedFiles] = useState([]);
   const [zipBlob, setZipBlob] = useState(null);
 
+  // Input file preview data
+  const [coursesTableData, setCoursesTableData] = useState(null);
+  const [roomsTableData, setRoomsTableData] = useState(null);
+  const [inputPreviewTab, setInputPreviewTab] = useState(0); // 0 = courses, 1 = rooms
+
   const handleLogout = () => {
     localStorage.removeItem("token");
     navigate("/login");
@@ -84,6 +43,16 @@ export default function GeneratePage() {
 
   const handleCoursesFile = useCallback((f) => setCoursesFile(f), []);
   const handleRoomsFile = useCallback((f) => setRoomsFile(f), []);
+
+  const handleCoursesTableData = useCallback((data) => {
+    setCoursesTableData(data);
+    setInputPreviewTab(0);
+  }, []);
+
+  const handleRoomsTableData = useCallback((data) => {
+    setRoomsTableData(data);
+    if (data && !coursesTableData) setInputPreviewTab(1);
+  }, [coursesTableData]);
 
   const handleGenerate = async () => {
     if (!coursesFile || !roomsFile) {
@@ -201,347 +170,398 @@ export default function GeneratePage() {
 
   const canGenerate = !!coursesFile && !!roomsFile && !loading;
   const hasResults = generatedFiles.length > 0;
+  const hasInputPreview = !!(coursesTableData || roomsTableData);
+
+  const inputTabs = [
+    { label: "Courses", data: coursesTableData, file: coursesFile },
+    { label: "Rooms", data: roomsTableData, file: roomsFile },
+  ].filter((t) => t.data);
 
   return (
     <div style={{
       display: "flex",
+      flexDirection: "column",
       minHeight: "100vh",
       background: "var(--bg-base)",
       fontFamily: "var(--font-body)",
     }}>
-      {/* ─── SIDEBAR ───────────────────────────────────────────────────── */}
-      <nav className="sidebar" style={{ display: "flex", flexDirection: "column" }}>
-        {/* Logo */}
-        <div style={{
-          padding: "20px 16px 16px",
-          borderBottom: "1px solid var(--border-subtle)",
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <div style={{
-              padding: "7px",
-              background: "var(--accent-muted)",
-              borderRadius: "9px",
-              border: "1px solid var(--border-default)",
-              color: "var(--accent)",
-            }}>
-              <Logo size={22} />
-            </div>
-            <div>
-              <div style={{
-                fontFamily: "var(--font-display)", fontWeight: 700,
-                fontSize: "0.9rem", color: "var(--text-primary)", letterSpacing: "-0.02em",
-              }}>
-                IIIT DWD
-              </div>
-              <div style={{
-                fontFamily: "var(--font-mono)", fontSize: "0.58rem",
-                color: "var(--text-muted)", letterSpacing: "0.08em",
-                textTransform: "uppercase",
-              }}>
-                Scheduler
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Nav items */}
-        <div style={{ flex: 1, padding: "12px 8px", display: "flex", flexDirection: "column", gap: "2px" }}>
+      {/* ─── HEADER ──────────────────────────────────────────────────────── */}
+      <header style={{
+        height: "56px",
+        borderBottom: "1px solid var(--border-subtle)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "0 28px",
+        background: "var(--bg-surface)",
+        position: "sticky",
+        top: 0,
+        zIndex: 10,
+      }}>
+        {/* Left: Logo + title */}
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
           <div style={{
-            padding: "4px 8px 8px",
-            fontSize: "0.62rem", fontWeight: 600, color: "var(--text-muted)",
-            textTransform: "uppercase", letterSpacing: "0.1em",
+            padding: "6px",
+            background: "var(--accent-muted)",
+            borderRadius: "8px",
+            border: "1px solid var(--border-default)",
+            color: "var(--accent)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
           }}>
-            Workspace
+            <Logo size={18} />
           </div>
-          <NavItem icon={Zap} label="Generate" active={true} />
-          <NavItem icon={Clock} label="History" active={false} onClick={() => {}} />
-          <NavItem icon={LayoutGrid} label="Overview" active={false} onClick={() => {}} />
-        </div>
-
-        {/* Bottom: user + logout */}
-        <div style={{ padding: "12px 8px", borderTop: "1px solid var(--border-subtle)" }}>
-          <div style={{
-            display: "flex", alignItems: "center", gap: "8px",
-            padding: "8px 10px", borderRadius: "8px",
-            background: "var(--bg-elevated)", marginBottom: "6px",
-          }}>
-            <div style={{
-              width: "28px", height: "28px", borderRadius: "50%",
-              background: "var(--accent-muted)", border: "1px solid var(--border-default)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              color: "var(--text-accent)", flexShrink: 0,
-            }}>
-              <User size={13} />
-            </div>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--text-primary)" }}>Admin</div>
-              <div style={{ fontSize: "0.65rem", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
-                iiitdwd.ac.in
-              </div>
-            </div>
-          </div>
-          <NavItem icon={LogOut} label="Log out" danger onClick={handleLogout} />
-        </div>
-      </nav>
-
-      {/* ─── MAIN ──────────────────────────────────────────────────────── */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
-        {/* Header bar */}
-        <header style={{
-          height: "56px",
-          borderBottom: "1px solid var(--border-subtle)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "0 28px",
-          background: "var(--bg-surface)",
-          position: "sticky",
-          top: 0,
-          zIndex: 10,
-        }}>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <span style={{
               fontFamily: "var(--font-display)", fontWeight: 700,
-              fontSize: "1rem", color: "var(--text-primary)",
+              fontSize: "0.95rem", color: "var(--text-primary)", letterSpacing: "-0.02em",
             }}>
-              Generate
+              IIIT DWD
             </span>
-            <span style={{ color: "var(--border-default)" }}>/</span>
-            <span style={{ fontSize: "0.82rem", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
-              timetable
+            <span style={{ color: "var(--border-default)", fontSize: "1rem" }}>/</span>
+            <span style={{
+              fontFamily: "var(--font-mono)", fontSize: "0.78rem",
+              color: "var(--text-muted)", letterSpacing: "0.04em",
+            }}>
+              Scheduler
             </span>
           </div>
+        </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <span className="badge badge-accent">
-              <User size={10} /> Admin
-            </span>
-            <button
-              onClick={toggle}
-              className="btn btn-ghost btn-sm"
-              title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-            >
-              {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
-            </button>
+        {/* Right: User badge + theme + logout */}
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <span className="badge badge-accent">
+            <User size={10} /> Admin
+          </span>
+          <button
+            onClick={toggle}
+            className="btn btn-ghost btn-sm"
+            title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+          >
+            {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
+          </button>
+          <button
+            onClick={handleLogout}
+            className="btn btn-ghost btn-sm"
+            title="Log out"
+            style={{ color: "var(--error)" }}
+          >
+            <LogOut size={15} />
+          </button>
+        </div>
+      </header>
+
+      {/* ─── CONTENT ─────────────────────────────────────────────────────── */}
+      <main style={{ flex: 1, padding: "32px 28px", overflowY: "auto" }}>
+        <div style={{ maxWidth: "960px", margin: "0 auto" }}>
+
+          {/* Page header */}
+          <div className="animate-fade-up" style={{ marginBottom: "28px" }}>
+            <h1 className="text-heading" style={{ marginBottom: "6px" }}>
+              Timetable Generator
+            </h1>
+            <p style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>
+              Upload your input files, then run the constraint solver to generate conflict-free timetables.
+            </p>
           </div>
-        </header>
 
-        {/* Content */}
-        <main style={{ flex: 1, padding: "32px 28px", overflowY: "auto" }}>
-          <div style={{ maxWidth: "860px", margin: "0 auto" }}>
-
-            {/* Page header */}
-            <div className="animate-fade-up" style={{ marginBottom: "28px" }}>
-              <h1 className="text-heading" style={{ marginBottom: "6px" }}>
-                Timetable Generator
-              </h1>
-              <p style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>
-                Upload your input files, then run the constraint solver to generate conflict-free timetables.
-              </p>
+          {/* ── UPLOAD SECTION ── */}
+          <section
+            className="animate-fade-up delay-100"
+            style={{
+              background: "var(--bg-surface)",
+              border: "1px solid var(--border-subtle)",
+              borderRadius: "14px",
+              padding: "24px",
+              marginBottom: "20px",
+            }}
+          >
+            <div style={{
+              display: "flex", alignItems: "center", gap: "10px",
+              marginBottom: "20px", paddingBottom: "16px",
+              borderBottom: "1px solid var(--border-subtle)"
+            }}>
+              <div style={{
+                width: "28px", height: "28px", borderRadius: "7px",
+                background: "var(--accent-muted)", border: "1px solid var(--border-default)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                color: "var(--text-accent)",
+              }}>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.7rem", fontWeight: 700 }}>01</span>
+              </div>
+              <h2 className="text-title">Upload Input Files</h2>
             </div>
 
-            {/* ── UPLOAD SECTION ── */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
+              <div>
+                <label style={{
+                  display: "block", marginBottom: "8px",
+                  fontSize: "0.78rem", fontWeight: 600,
+                  color: "var(--text-secondary)", fontFamily: "var(--font-display)",
+                  textTransform: "uppercase", letterSpacing: "0.07em",
+                }}>
+                  Courses File
+                </label>
+                <Dropzone
+                  id="courses-file"
+                  label="courses.xlsx"
+                  accept=".xlsx,.xls"
+                  onFile={handleCoursesFile}
+                  onTableData={handleCoursesTableData}
+                  showPreview={false}
+                />
+              </div>
+              <div>
+                <label style={{
+                  display: "block", marginBottom: "8px",
+                  fontSize: "0.78rem", fontWeight: 600,
+                  color: "var(--text-secondary)", fontFamily: "var(--font-display)",
+                  textTransform: "uppercase", letterSpacing: "0.07em",
+                }}>
+                  Rooms File
+                </label>
+                <Dropzone
+                  id="rooms-file"
+                  label="rooms.xlsx"
+                  accept=".xlsx,.xls"
+                  onFile={handleRoomsFile}
+                  onTableData={handleRoomsTableData}
+                  showPreview={false}
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* ── INPUT FILE PREVIEW (Tabbed) ── */}
+          {hasInputPreview && (
             <section
               className="animate-fade-up delay-100"
-              style={{
-                background: "var(--bg-surface)",
-                border: "1px solid var(--border-subtle)",
-                borderRadius: "14px",
-                padding: "24px",
-                marginBottom: "20px",
-              }}
+              style={{ marginBottom: "20px" }}
             >
-              <div style={{
-                display: "flex", alignItems: "center", gap: "10px",
-                marginBottom: "20px", paddingBottom: "16px",
-                borderBottom: "1px solid var(--border-subtle)"
-              }}>
+              <div
+                style={{
+                  background: "var(--bg-surface)",
+                  border: "1px solid var(--border-default)",
+                  borderRadius: "14px",
+                  overflow: "hidden",
+                  boxShadow: "var(--shadow-md)",
+                }}
+              >
+                {/* Header */}
                 <div style={{
-                  width: "28px", height: "28px", borderRadius: "7px",
-                  background: "var(--accent-muted)", border: "1px solid var(--border-default)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  color: "var(--text-accent)",
+                  padding: "14px 20px",
+                  borderBottom: "1px solid var(--border-subtle)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "12px",
+                  background: "var(--bg-elevated)",
                 }}>
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.7rem", fontWeight: 700 }}>01</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <Table2 size={16} style={{ color: "var(--text-accent)" }} />
+                    <span style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "0.95rem" }}>
+                      Input Files Preview
+                    </span>
+                    <span className="badge badge-accent">{inputTabs.length} file{inputTabs.length > 1 ? "s" : ""}</span>
+                  </div>
                 </div>
-                <h2 className="text-title">Upload Input Files</h2>
-              </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
-                <div>
-                  <label style={{
-                    display: "block", marginBottom: "8px",
-                    fontSize: "0.78rem", fontWeight: 600,
-                    color: "var(--text-secondary)", fontFamily: "var(--font-display)",
-                    textTransform: "uppercase", letterSpacing: "0.07em",
-                  }}>
-                    Courses File
-                  </label>
-                  <Dropzone
-                    id="courses-file"
-                    label="courses.xlsx"
-                    accept=".xlsx,.xls"
-                    onFile={handleCoursesFile}
-                  />
-                </div>
-                <div>
-                  <label style={{
-                    display: "block", marginBottom: "8px",
-                    fontSize: "0.78rem", fontWeight: 600,
-                    color: "var(--text-secondary)", fontFamily: "var(--font-display)",
-                    textTransform: "uppercase", letterSpacing: "0.07em",
-                  }}>
-                    Rooms File
-                  </label>
-                  <Dropzone
-                    id="rooms-file"
-                    label="rooms.xlsx"
-                    accept=".xlsx,.xls"
-                    onFile={handleRoomsFile}
-                  />
-                </div>
-              </div>
-            </section>
-
-            {/* ── GENERATE SECTION ── */}
-            <section
-              className="animate-fade-up delay-200"
-              style={{
-                background: "var(--bg-surface)",
-                border: "1px solid var(--border-subtle)",
-                borderRadius: "14px",
-                padding: "24px",
-                marginBottom: "20px",
-              }}
-            >
-              <div style={{
-                display: "flex", alignItems: "center", gap: "10px",
-                marginBottom: "20px", paddingBottom: "16px",
-                borderBottom: "1px solid var(--border-subtle)"
-              }}>
+                {/* Tab bar */}
                 <div style={{
-                  width: "28px", height: "28px", borderRadius: "7px",
-                  background: "var(--accent-muted)", border: "1px solid var(--border-default)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  color: "var(--text-accent)",
+                  display: "flex",
+                  gap: "0",
+                  borderBottom: "1px solid var(--border-subtle)",
+                  background: "var(--bg-elevated)",
+                  overflowX: "auto",
+                  scrollbarWidth: "none",
+                  padding: "0 16px",
+                  alignItems: "flex-end",
                 }}>
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.7rem", fontWeight: 700 }}>02</span>
+                  {inputTabs.map((tab, i) => (
+                    <button
+                      key={tab.label}
+                      onClick={() => setInputPreviewTab(i)}
+                      style={{
+                        padding: "10px 14px",
+                        background: "none",
+                        border: "none",
+                        borderBottom: `2px solid ${i === inputPreviewTab ? "var(--accent)" : "transparent"}`,
+                        color: i === inputPreviewTab ? "var(--text-accent)" : "var(--text-muted)",
+                        cursor: "pointer",
+                        fontSize: "0.75rem",
+                        fontFamily: "var(--font-mono)",
+                        fontWeight: i === inputPreviewTab ? 600 : 400,
+                        whiteSpace: "nowrap",
+                        transition: "all 0.18s ease",
+                        flexShrink: 0,
+                        marginBottom: "-1px",
+                      }}
+                    >
+                      {tab.label} — {tab.file?.name || "file"}
+                    </button>
+                  ))}
                 </div>
-                <h2 className="text-title">Run Scheduler</h2>
-              </div>
 
-              {/* Status messages */}
-              {error && (
-                <div
-                  className="animate-slide-in"
-                  style={{
-                    display: "flex", alignItems: "flex-start", gap: "10px",
-                    padding: "12px 14px", borderRadius: "10px", marginBottom: "16px",
-                    background: "var(--error-muted)", border: "1px solid rgba(248,113,113,0.2)",
-                    color: "var(--error)", fontSize: "0.84rem",
-                  }}
-                >
-                  <AlertCircle size={15} style={{ flexShrink: 0, marginTop: "1px" }} />
-                  {error}
-                </div>
-              )}
-
-              {success && (
-                <div
-                  className="animate-slide-in"
-                  style={{
-                    display: "flex", alignItems: "center", gap: "10px",
-                    padding: "12px 14px", borderRadius: "10px", marginBottom: "16px",
-                    background: "var(--success-muted)", border: "1px solid rgba(16,185,129,0.2)",
-                    color: "var(--success)", fontSize: "0.84rem",
-                  }}
-                >
-                  <CheckCircle2 size={15} />
-                  {success}
-                </div>
-              )}
-
-              <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-                <button
-                  className="btn btn-primary btn-lg"
-                  disabled={!canGenerate}
-                  onClick={handleGenerate}
-                  style={{ minWidth: "200px" }}
-                >
-                  {loading ? (
+                {/* Content */}
+                <div style={{ padding: "20px" }}>
+                  {inputTabs[inputPreviewTab] ? (
                     <>
-                      <span style={{
-                        width: "15px", height: "15px", borderRadius: "50%",
-                        border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "#fff",
-                        animation: "spin 0.7s linear infinite", display: "inline-block",
-                      }} />
-                      Generating…
+                      <div style={{
+                        display: "flex", alignItems: "center", gap: "8px",
+                        marginBottom: "14px",
+                      }}>
+                        <FileSpreadsheet size={14} style={{ color: "var(--text-accent)" }} />
+                        <span style={{
+                          fontFamily: "var(--font-mono)", fontSize: "0.82rem",
+                          color: "var(--text-secondary)",
+                        }}>
+                          {inputTabs[inputPreviewTab].data?.sheetName || inputTabs[inputPreviewTab].label}
+                        </span>
+                      </div>
+                      <DataTable data={inputTabs[inputPreviewTab].data} maxHeight="340px" />
                     </>
                   ) : (
-                    <>
-                      <Zap size={15} />
-                      Generate Timetables
-                    </>
+                    <div style={{ padding: "32px", textAlign: "center", color: "var(--text-muted)" }}>
+                      Upload a file to see its preview.
+                    </div>
                   )}
-                </button>
-
-                {/* Readiness indicator */}
-                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                  <span className={`badge ${coursesFile ? "badge-success" : "badge-neutral"}`}>
-                    {coursesFile ? <CheckCircle2 size={9} /> : null}
-                    Courses {coursesFile ? "ready" : "missing"}
-                  </span>
-                  <span className={`badge ${roomsFile ? "badge-success" : "badge-neutral"}`}>
-                    {roomsFile ? <CheckCircle2 size={9} /> : null}
-                    Rooms {roomsFile ? "ready" : "missing"}
-                  </span>
                 </div>
               </div>
-
-              {/* Step progress */}
-              {(progressActive || progressDone) && (
-                <div style={{ marginTop: "20px" }}>
-                  <StepProgress active={progressActive} done={progressDone} />
-                </div>
-              )}
             </section>
+          )}
 
-            {/* ── PREVIEW SECTION ── */}
-            {hasResults && (
-              <section className="animate-fade-up delay-300">
-                <div style={{
-                  display: "flex", alignItems: "center", gap: "10px",
-                  marginBottom: "16px",
-                }}>
-                  <div style={{
-                    width: "28px", height: "28px", borderRadius: "7px",
-                    background: "var(--success-muted)", border: "1px solid rgba(16,185,129,0.25)",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    color: "var(--success)",
-                  }}>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.7rem", fontWeight: 700 }}>03</span>
-                  </div>
-                  <h2 className="text-title">Preview & Download</h2>
-                </div>
+          {/* ── GENERATE SECTION ── */}
+          <section
+            className="animate-fade-up delay-200"
+            style={{
+              background: "var(--bg-surface)",
+              border: "1px solid var(--border-subtle)",
+              borderRadius: "14px",
+              padding: "24px",
+              marginBottom: "20px",
+            }}
+          >
+            <div style={{
+              display: "flex", alignItems: "center", gap: "10px",
+              marginBottom: "20px", paddingBottom: "16px",
+              borderBottom: "1px solid var(--border-subtle)"
+            }}>
+              <div style={{
+                width: "28px", height: "28px", borderRadius: "7px",
+                background: "var(--accent-muted)", border: "1px solid var(--border-default)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                color: "var(--text-accent)",
+              }}>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.7rem", fontWeight: 700 }}>02</span>
+              </div>
+              <h2 className="text-title">Run Scheduler</h2>
+            </div>
 
-                <TimetableViewer
-                  files={generatedFiles}
-                  onDownloadAll={handleDownloadAll}
-                  onDownloadFile={handleDownloadFile}
-                />
-              </section>
+            {/* Status messages */}
+            {error && (
+              <div
+                className="animate-slide-in"
+                style={{
+                  display: "flex", alignItems: "flex-start", gap: "10px",
+                  padding: "12px 14px", borderRadius: "10px", marginBottom: "16px",
+                  background: "var(--error-muted)", border: "1px solid rgba(248,113,113,0.2)",
+                  color: "var(--error)", fontSize: "0.84rem",
+                }}
+              >
+                <AlertCircle size={15} style={{ flexShrink: 0, marginTop: "1px" }} />
+                {error}
+              </div>
             )}
 
-          </div>
-        </main>
-      </div>
+            {success && (
+              <div
+                className="animate-slide-in"
+                style={{
+                  display: "flex", alignItems: "center", gap: "10px",
+                  padding: "12px 14px", borderRadius: "10px", marginBottom: "16px",
+                  background: "var(--success-muted)", border: "1px solid rgba(16,185,129,0.2)",
+                  color: "var(--success)", fontSize: "0.84rem",
+                }}
+              >
+                <CheckCircle2 size={15} />
+                {success}
+              </div>
+            )}
 
-      {/* Responsive sidebar hide */}
-      <style>{`
-        @media (max-width: 768px) {
-          .sidebar { display: none; }
-        }
-      `}</style>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+              <button
+                className="btn btn-primary btn-lg"
+                disabled={!canGenerate}
+                onClick={handleGenerate}
+                style={{ minWidth: "200px" }}
+              >
+                {loading ? (
+                  <>
+                    <span style={{
+                      width: "15px", height: "15px", borderRadius: "50%",
+                      border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "#fff",
+                      animation: "spin 0.7s linear infinite", display: "inline-block",
+                    }} />
+                    Generating…
+                  </>
+                ) : (
+                  <>
+                    <Zap size={15} />
+                    Generate Timetables
+                  </>
+                )}
+              </button>
+
+              {/* Readiness indicator */}
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                <span className={`badge ${coursesFile ? "badge-success" : "badge-neutral"}`}>
+                  {coursesFile ? <CheckCircle2 size={9} /> : null}
+                  Courses {coursesFile ? "ready" : "missing"}
+                </span>
+                <span className={`badge ${roomsFile ? "badge-success" : "badge-neutral"}`}>
+                  {roomsFile ? <CheckCircle2 size={9} /> : null}
+                  Rooms {roomsFile ? "ready" : "missing"}
+                </span>
+              </div>
+            </div>
+
+            {/* Step progress */}
+            {(progressActive || progressDone) && (
+              <div style={{ marginTop: "20px" }}>
+                <StepProgress active={progressActive} done={progressDone} />
+              </div>
+            )}
+          </section>
+
+          {/* ── PREVIEW SECTION ── */}
+          {hasResults && (
+            <section className="animate-fade-up delay-300">
+              <div style={{
+                display: "flex", alignItems: "center", gap: "10px",
+                marginBottom: "16px",
+              }}>
+                <div style={{
+                  width: "28px", height: "28px", borderRadius: "7px",
+                  background: "var(--success-muted)", border: "1px solid rgba(16,185,129,0.25)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  color: "var(--success)",
+                }}>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.7rem", fontWeight: 700 }}>03</span>
+                </div>
+                <h2 className="text-title">Preview & Download</h2>
+              </div>
+
+              <TimetableViewer
+                files={generatedFiles}
+                onDownloadAll={handleDownloadAll}
+                onDownloadFile={handleDownloadFile}
+              />
+            </section>
+          )}
+
+        </div>
+      </main>
     </div>
   );
 }
