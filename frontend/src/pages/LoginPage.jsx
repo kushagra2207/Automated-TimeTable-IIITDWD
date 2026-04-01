@@ -244,35 +244,6 @@ export default function LoginPage() {
               generating clash-free timetables for all batches and faculty in seconds.
             </p>
           </div>
-
-          {/* Stats row */}
-          <div
-            className="animate-fade-up delay-200"
-            style={{ display: "flex", gap: "24px", marginTop: "32px" }}
-          >
-            {[
-              { num: "4", label: "Departments" },
-              { num: "∞", label: "Constraints" },
-              { num: "<5s", label: "Generation" },
-            ].map(({ num, label }) => (
-              <div key={label}>
-                <div style={{
-                  fontFamily: "var(--font-display)", fontWeight: 700,
-                  fontSize: "clamp(1.4rem, 2.5vw, 2rem)",
-                  color: "var(--text-primary)", letterSpacing: "-0.03em",
-                }}>
-                  {num}
-                </div>
-                <div style={{
-                  fontSize: "0.72rem", color: "var(--text-muted)",
-                  textTransform: "uppercase", letterSpacing: "0.08em",
-                  fontWeight: 500, marginTop: "2px",
-                }}>
-                  {label}
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
 
         {/* Footer */}

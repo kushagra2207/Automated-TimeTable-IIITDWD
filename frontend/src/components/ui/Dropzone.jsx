@@ -9,7 +9,7 @@ function formatBytes(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export default function Dropzone({ label, accept = ".xlsx", onFile, id }) {
+export default function Dropzone({ label, accept = ".xlsx", onFile, id, onTableData, showPreview = true }) {
   const inputRef = useRef(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [file, setFile] = useState(null);
@@ -39,6 +39,7 @@ export default function Dropzone({ label, accept = ".xlsx", onFile, id }) {
       setTableData(result);
       setParseState("done");
       setShowTable(true);
+      onTableData?.(result);
     } catch (err) {
       setParseError(err.message);
       setParseState("error");
@@ -68,6 +69,7 @@ export default function Dropzone({ label, accept = ".xlsx", onFile, id }) {
     setParseError("");
     setShowTable(false);
     onFile(null);
+    onTableData?.(null);
     if (inputRef.current) inputRef.current.value = "";
   };
 
@@ -181,25 +183,14 @@ export default function Dropzone({ label, accept = ".xlsx", onFile, id }) {
                 </p>
               </div>
 
-              <div style={{ display: "flex", gap: "6px", flexShrink: 0 }}>
-                {parseState === "done" && (
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={(e) => { e.stopPropagation(); setShowTable((v) => !v); }}
-                    style={{ fontSize: "0.72rem" }}
-                  >
-                    {showTable ? "Hide" : "Preview"}
-                  </button>
-                )}
-                <button
-                  className="btn btn-danger btn-sm"
-                  onClick={handleRemove}
-                  style={{ padding: "5px 8px" }}
-                  title="Remove file"
-                >
-                  <X size={13} />
-                </button>
-              </div>
+              <button
+                className="btn btn-danger btn-sm"
+                onClick={handleRemove}
+                style={{ padding: "5px 8px", flexShrink: 0 }}
+                title="Remove file"
+              >
+                <X size={13} />
+              </button>
             </div>
 
             {parseState === "error" && parseError && (
@@ -216,7 +207,7 @@ export default function Dropzone({ label, accept = ".xlsx", onFile, id }) {
       </div>
 
       {/* Skeleton loader */}
-      {parseState === "loading" && (
+      {showPreview && parseState === "loading" && (
         <div style={{ display: "flex", flexDirection: "column", gap: "8px", padding: "4px 0" }}>
           <div className="skeleton" style={{ height: "36px", borderRadius: "8px" }} />
           {[...Array(4)].map((_, i) => (
@@ -226,7 +217,7 @@ export default function Dropzone({ label, accept = ".xlsx", onFile, id }) {
       )}
 
       {/* Table preview */}
-      {showTable && tableData && parseState === "done" && (
+      {showPreview && showTable && tableData && parseState === "done" && (
         <div className="animate-fade-up" style={{
           background: "var(--bg-surface)", border: "1px solid var(--border-subtle)",
           borderRadius: "12px", padding: "16px",
